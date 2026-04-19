@@ -5,7 +5,27 @@ import eslintPluginVue from 'eslint-plugin-vue'
 import vueParser from 'vue-eslint-parser'
 
 export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out'] },
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/dist-electron/**',
+      '**/out/**',
+      '**/build/**',
+      '**/.husky/**',
+      '**/public/**',
+      '**/*.min.js',
+      '**/*.min.mjs',
+      '**/*.min.cjs',
+      '**/*.bundle.js',
+      '**/vendor/**',
+      '**/third_party/**',
+      '**/third-party/**',
+      'resources/**',
+      'scripts/**',
+      'pnpm-lock.yaml',
+    ],
+  },
   tseslint.configs.recommended,
   eslintPluginVue.configs['flat/recommended'],
   {

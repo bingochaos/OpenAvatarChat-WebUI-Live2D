@@ -1,5 +1,6 @@
 import Iconfont from './index.vue'
 
+import AvatarModel from './icons/AvatarModel.vue'
 import CameraOff from './icons/CameraOff.vue'
 import CameraOn from './icons/CameraOn.vue'
 import CheckIcon from './icons/Check.vue'
@@ -16,6 +17,7 @@ import SubtitleOff from './icons/SubtitleOff.vue'
 import SubtitleOn from './icons/SubtitleOn.vue'
 
 export {
+  AvatarModel,
   CameraOff,
   CameraOn,
   CheckIcon,

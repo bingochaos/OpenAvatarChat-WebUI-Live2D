@@ -18,7 +18,10 @@ import { TYVoiceChatState } from '@/interface/voiceChat'
 import EventEmitter from 'eventemitter3'
 // import * as GaussianSplats3D from "./gaussian-splats-3d.module.js";
 import { LAMRenderer } from './avatarRenderers/lam'
+import { Live2DRenderer } from './avatarRenderers/live2d'
 import { nanoid } from 'nanoid'
+
+export type AvatarRendererType = 'lam' | 'live2d' | '' // '' means pure audio mode
 
 interface AvatarHandlerOptions {
   container: HTMLDivElement
@@ -26,7 +29,7 @@ interface AvatarHandlerOptions {
   ws: WS
   downloadProgress?: (percent: number) => void
   loadProgress?: (percent: number) => void
-  rendererType: 'lam' | '' // '' means pure audio mode
+  rendererType: AvatarRendererType
 }
 
 export class AvatarHandler extends EventEmitter {
@@ -40,7 +43,7 @@ export class AvatarHandler extends EventEmitter {
   private _processor!: Processor
   private _renderer: { dispose?: () => void } | null = null
   private _audioMute = false
-  private _rendererType: 'lam' | '' = 'lam'
+  private _rendererType: AvatarRendererType = 'lam'
   private _heartbeatWorker?: Worker
   private _currentStreamKey?: string
   curState = TYVoiceChatState.Idle
@@ -108,9 +111,34 @@ export class AvatarHandler extends EventEmitter {
         loadProgress: this._loadProgress.bind(this),
       })
       this._renderer = await lamRenderer.getInstance()
+    } else if (this._rendererType === 'live2d') {
+      const live2dRenderer = new Live2DRenderer({
+        container: this._avatarDivEle,
+        assetsPath: this._assetsPath,
+        getChatState: this.getChatState.bind(this),
+        getExpressionData: () =>
+          this.getArkitFaceFrame() as Record<string, number> | null | undefined,
+        getAudioAnalyser: this.getAudioAnalyser.bind(this),
+        downloadProgress: this._downloadProgress.bind(this),
+        loadProgress: this._loadProgress.bind(this),
+      })
+      this._renderer = await live2dRenderer.getInstance()
     } else {
       this._renderer = null
     }
+  }
+  // Hot-swap the underlying renderer without tearing down the WS / processor
+  // / event bindings. Used by the Live2D model picker so the user can switch
+  // between Cubism 4 models while in a live session.
+  async reloadRenderer(newAssetsPath?: string): Promise<void> {
+    if (newAssetsPath !== undefined) this._assetsPath = newAssetsPath
+    try {
+      this._renderer?.dispose?.()
+    } catch (e) {
+      console.warn('Failed to dispose previous avatar renderer', e)
+    }
+    this._renderer = null
+    await this.render()
   }
   setAvatarMute(isMute: boolean): void {
     this._processor.setMute(isMute)
@@ -121,6 +149,9 @@ export class AvatarHandler extends EventEmitter {
   }
   getArkitFaceFrame(): unknown {
     return this._processor?.getArkitFaceFrame().arkitFace
+  }
+  getAudioAnalyser(): { analyser: AnalyserNode; audioCtx: AudioContext } | null {
+    return this._processor?.getActiveAnalyser() || null
   }
   interrupt(needSendInterrupt: boolean = true): void {
     const maxBatchId = this._processor?.interrupt()

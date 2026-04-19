@@ -64,7 +64,7 @@ export const useVideoChatStore = defineStore('videoChatStore', {
             this.chatDataChannel = dataChannel as RTCDataChannel
             this.initChatDataChannel()
 
-            if (appStore.avatarType === 'lam') {
+            if (appStore.avatarType === 'lam' || appStore.avatarType === 'live2d') {
               if (appStore.wsSessionRoute) {
                 const ws = this.initWebsocket(appStore.wsSessionRoute, this.webRTCId)
                 this.localAvatarRenderer = this.initAvatarHandler(ws, appStore.avatarAssetsPath)
@@ -88,7 +88,7 @@ export const useVideoChatStore = defineStore('videoChatStore', {
         this.chatDataChannel = null
         chatStore.replying = false
         await mediaStore.accessDevice()
-        if (appStore.avatarType === 'lam') {
+        if (appStore.avatarType === 'lam' || appStore.avatarType === 'live2d') {
           this.localAvatarRenderer?.exit()
           if (this.localAvatarRenderer instanceof AvatarHandler) {
             this.localAvatarRenderer.removeAllListeners()
@@ -124,7 +124,7 @@ export const useVideoChatStore = defineStore('videoChatStore', {
       const chatStore = useChatStore()
       console.log('interrupt')
       const appStore = useAppStore()
-      if (appStore.avatarType === 'lam') {
+      if (appStore.avatarType === 'lam' || appStore.avatarType === 'live2d') {
         this.localAvatarRenderer?.interrupt()
         chatStore.replying = false
       } else if (this.chatDataChannel) {
@@ -183,7 +183,7 @@ export const useVideoChatStore = defineStore('videoChatStore', {
         container: visionState.remoteVideoContainerRef!,
         assetsPath,
         ws,
-        rendererType: 'lam',
+        rendererType: useAppStore().avatarType,
         loadProgress: (progress) => {
           console.log('gs loadProgress', progress)
           this.gsLoadPercent = progress

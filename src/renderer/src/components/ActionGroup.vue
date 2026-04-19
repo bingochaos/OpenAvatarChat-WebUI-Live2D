@@ -83,6 +83,33 @@
         <Iconfont :icon="showChatRecords ? SubtitleOn : SubtitleOff" />
       </div>
     </div>
+    <div v-if="avatarType === 'live2d' && live2dModels.length > 1">
+      <div
+        v-click-outside="() => (modelListShow = false)"
+        class="action"
+        @click="() => (modelListShow = !modelListShow)"
+      >
+        <Iconfont :icon="AvatarModel" />
+        <div v-show="modelListShow" class="selectors" :class="{ left: isLandscape }">
+          <div
+            v-for="m in live2dModels"
+            :key="m.id"
+            class="selector"
+            @click.stop="
+              () => {
+                handleLive2dModelChange(m.id)
+                modelListShow = false
+              }
+            "
+          >
+            {{ m.label }}
+            <div v-if="m.id === selectedLive2dModelId" class="active-icon">
+              <CheckIcon />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 <script setup lang="ts">
@@ -96,6 +123,7 @@ import { useWSVideoChatStore } from '@/store/ws'
 import { useAppStore } from '@/store/app'
 import { useVisionStore } from '@/store/vision'
 import Iconfont, {
+  AvatarModel,
   CameraOff,
   CameraOn,
   CheckIcon,
@@ -130,12 +158,29 @@ const streamState = computed(() =>
   appStore.chatMode === 'ws' ? wsChatStore.streamState : videoChatStore.streamState
 )
 
+const { avatarType, live2dModels, selectedLive2dModelId } = storeToRefs(appStore)
+
 const { handleVolumeMute, handleSubtitleToggle } = chatStore
 const { handleCameraOff, handleMicMuted, handleDeviceChange } = mediaStore
 
 const { wrapperRect, isLandscape } = storeToRefs(visionStore)
 const micListShow = ref(false)
 const cameraListShow = ref(false)
+const modelListShow = ref(false)
+
+async function handleLive2dModelChange(id: string): Promise<void> {
+  if (!appStore.selectLive2dModel(id)) return
+  const renderer = chatStore.activeRenderer
+  // If a session is live we reload in place; otherwise the new path is
+  // simply picked up when the next session starts.
+  if (renderer?.reloadRenderer) {
+    try {
+      await renderer.reloadRenderer(appStore.avatarAssetsPath)
+    } catch (e) {
+      console.error('Failed to reload Live2D model', e)
+    }
+  }
+}
 </script>
 
 <style lang="less" scoped>

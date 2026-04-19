@@ -85,8 +85,8 @@ export class Processor {
   private _maxBatchId?: number
   private _arkitFaceShape?: number
   private _tts2FaceShape?: number
-  private _rendererType?: 'lam' | ''
-  constructor(ee: EventEmitter, rendererType?: 'lam' | '') {
+  private _rendererType?: 'lam' | 'live2d' | ''
+  constructor(ee: EventEmitter, rendererType?: 'lam' | 'live2d' | '') {
     this.ee = ee
     this._rendererType = rendererType
   }
@@ -111,6 +111,12 @@ export class Processor {
     return {
       arkitFace: this._getArkitFaceFrame(),
     }
+  }
+  getActiveAnalyser(): { analyser: AnalyserNode; audioCtx: AudioContext } | null {
+    const targetMotion = this._motionDataGroups.find((m) => m.player)
+    const p = targetMotion?.player
+    if (!p || !p.analyserNode || !p.audioCtx) return null
+    return { analyser: p.analyserNode, audioCtx: p.audioCtx }
   }
   getLastBatchId() {
     let batch_id
@@ -285,7 +291,6 @@ export class Processor {
           // );
           const blob = new Blob(lastMotionGroup.motion_data_slices)
           const { parsedData, jsonSize, binSize } = await unpack(blob)
-          //console.log('parsedData', parsedData, jsonSize, binSize)
           lastMotionGroup.jsonSize = jsonSize
           lastMotionGroup.binSize = binSize
           const bin = blob.slice(12 + lastMotionGroup.jsonSize!)

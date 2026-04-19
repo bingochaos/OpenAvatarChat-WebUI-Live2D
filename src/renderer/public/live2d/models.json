@@ -1,0 +1,10 @@
+{
+  "$comment": "Front-end manifest of available Cubism 4 Live2D models. Can be regenerated automatically by scripts/download-live2d-models.sh, or edited by hand — each entry requires a matching folder under ./public/live2d/<id>/ with <Name>.model3.json inside.",
+  "models": [
+    {
+      "id": "hiyori",
+      "label": "Hiyori (桃瀬ひより)",
+      "path": "./live2d/hiyori/Hiyori.model3.json"
+    }
+  ]
+}
