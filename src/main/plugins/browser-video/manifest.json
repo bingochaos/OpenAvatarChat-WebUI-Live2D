@@ -1,0 +1,9 @@
+{
+  "id": "browser-video",
+  "name": "Browser Video Controller",
+  "entry": "index.ts",
+  "enabled": true,
+  "platform": "win32",
+  "version": "1.0.0",
+  "description": "Drive a Chromium browser via Playwright for searching and watching video sites."
+}

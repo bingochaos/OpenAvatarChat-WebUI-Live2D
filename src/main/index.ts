@@ -1,12 +1,34 @@
 import { app, shell, BrowserWindow, ipcMain, session, globalShortcut, PopupOptions } from 'electron'
 
 import { join } from 'path'
+import { config as loadDotenv } from 'dotenv'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.jpeg?asset'
 import { createContextMenu } from './features/contextMenu'
 import appState, { WindowSize } from './features/appState'
+import { EventBus, Logger } from './core/types'
+import { PluginRegistry } from './core/plugin-registry'
+import { Agent } from './core/agent'
+import { setupIPC } from './core/ipc-bridge'
+import { registerAll } from './plugins'
 
-function createWindow(): void {
+loadDotenv()
+
+const bootLogger = new Logger('main')
+const agentBus = new EventBus()
+const pluginRegistry = new PluginRegistry(agentBus)
+const agent = new Agent(pluginRegistry, agentBus, process.env.ANTHROPIC_API_KEY ?? '', {
+  model: process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514',
+  maxRounds: 15,
+})
+
+// TODO(phase-3): persist per-plugin config via electron-store
+const DEFAULT_PLUGIN_CONFIG: Record<string, Record<string, any>> = {
+  potplayer: {},
+  'browser-video': { locale: 'zh-CN' },
+}
+
+function createWindow(): BrowserWindow {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: WindowSize.width,
@@ -63,6 +85,22 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  return mainWindow
+}
+
+async function bootstrapAgent(mainWindow: BrowserWindow) {
+  try {
+    await registerAll(pluginRegistry)
+    await pluginRegistry.initAll(DEFAULT_PLUGIN_CONFIG)
+  } catch (err: any) {
+    bootLogger.error('Plugin bootstrap failed', { error: err?.message })
+  }
+  setupIPC(mainWindow, agent, pluginRegistry, agentBus)
+  bootLogger.info('Agent IPC ready', {
+    apiKey: agent.ready ? 'present' : 'missing',
+    tools: pluginRegistry.getAllTools().length,
+  })
 }
 
 app.commandLine.appendSwitch('ignore-certificate-errors')
@@ -83,13 +121,27 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  createWindow()
+  const mainWindow = createWindow()
+  bootstrapAgent(mainWindow)
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('before-quit', async () => {
+  try {
+    agent.abort()
+  } catch {
+    /* ignore */
+  }
+  try {
+    await pluginRegistry.disposeAll()
+  } catch (err: any) {
+    bootLogger.warn('disposeAll error', { error: err?.message })
+  }
 })
 
 // Quit when all windows are closed, except on macOS. There, it's common

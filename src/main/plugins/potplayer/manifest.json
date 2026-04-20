@@ -1,0 +1,9 @@
+{
+  "id": "potplayer",
+  "name": "PotPlayer Controller",
+  "entry": "index.ts",
+  "enabled": true,
+  "platform": "win32",
+  "version": "1.0.0",
+  "description": "Control the local PotPlayer (Windows) via command-line switches."
+}

@@ -1,8 +1,33 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer
 const api = {}
+
+// Agent bridge — exposes main/core/ipc-bridge.ts channels
+const electronAgent = {
+  sendMessage: (message: string) => ipcRenderer.invoke('agent:send', message),
+  abortAgent: () => ipcRenderer.invoke('agent:abort'),
+  clearHistory: () => ipcRenderer.invoke('agent:clear'),
+  isReady: () => ipcRenderer.invoke('agent:ready'),
+
+  listPlugins: () => ipcRenderer.invoke('plugins:list'),
+  healthCheck: () => ipcRenderer.invoke('plugins:health'),
+  reloadPlugin: (id: string, config?: Record<string, any>) =>
+    ipcRenderer.invoke('plugins:reload', id, config),
+  unloadPlugin: (id: string) => ipcRenderer.invoke('plugins:unload', id),
+
+  onAgentEvent: (cb: (event: unknown) => void) => {
+    const handler = (_ev: IpcRendererEvent, payload: unknown) => cb(payload)
+    ipcRenderer.on('agent:event', handler)
+    return () => ipcRenderer.off('agent:event', handler)
+  },
+  onPluginState: (cb: (data: unknown) => void) => {
+    const handler = (_ev: IpcRendererEvent, payload: unknown) => cb(payload)
+    ipcRenderer.on('plugin:state', handler)
+    return () => ipcRenderer.off('plugin:state', handler)
+  },
+}
 
 // Use `contextBridge` APIs to expose Electron APIs to
 // renderer only if context isolation is enabled, otherwise
@@ -21,6 +46,7 @@ if (process.contextIsolated) {
         return ipcRenderer.invoke('safe-fetch', { url, options })
       },
     })
+    contextBridge.exposeInMainWorld('electronAgent', electronAgent)
   } catch (error) {
     console.error(error)
   }
@@ -34,6 +60,8 @@ if (process.contextIsolated) {
   }
   // @ts-ignore (define in dts)
   window.api = api
+  // @ts-ignore (define in dts)
+  window.electronAgent = electronAgent
 }
 console.log(window.electronInfo)
 console.log(window.api)

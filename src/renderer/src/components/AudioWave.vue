@@ -51,7 +51,7 @@ onUnmounted(() => {
 })
 
 function setupAudioContext() {
-  // @ts-ignore
+  // @ts-ignore webkitAudioContext 兼容旧版 Safari
   audioContext = new (window.AudioContext || window.webkitAudioContext)()
   analyser = audioContext.createAnalyser()
   const streamSource = props.audioSourceCallback()

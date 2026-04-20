@@ -1,11 +1,18 @@
 /// <reference types="vite/client" />
 
-interface Window {
-  electronInfo: {
-    version: string
-    platform: string
+import type { ElectronAgentAPI } from '@/interface/agent'
+
+declare global {
+  interface Window {
+    electronInfo: {
+      version: string
+      platform: string
+    }
+    electronAgent: ElectronAgentAPI
   }
 }
+
+export {}
 
 interface ViteTypeOptions {
   // 添加这行代码，你就可以将 ImportMetaEnv 的类型设为严格模式，
