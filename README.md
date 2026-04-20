@@ -1,5 +1,7 @@
 # OpenAvatarChat WebUI
 
+> **本仓库是 [HumanAIGC-Engineering/OpenAvatarChat-WebUI](https://github.com/HumanAIGC-Engineering/OpenAvatarChat-WebUI) 的分支**，在上游之上新增了 Live2D（Cubism 3/4/5）端侧渲染支持。所有与 Live2D 相关的改动、模型下载脚本、兼容性说明和使用方法集中整理在 **[README.live2d.md](./README.live2d.md)**，其余内容保持与上游一致。
+
 ## 项目简介
 
 这是 [OpenAvatarChat](https://github.com/HumanAIGC-Engineering/OpenAvatarChat) 项目的官方 Web 前端界面，基于 Vue 3 + TypeScript + Vite 构建，同时支持 Electron 桌面应用。
@@ -24,13 +26,11 @@
 
 ### 变量说明
 
-| 环境变量                | 类型   | 用途                                                        | 默认值                               |
-| ----------------------- | ------ | ----------------------------------------------------------- | ------------------------------------ |
-| `VITE_SERVER_IP`        | String | OpenAvatarChat 后端服务器 IP 地址                           | 自动从 `location.hostname` 读取      |
-| `VITE_SERVER_PORT`      | String | 后端服务器端口                                              | 自动从 `location.port` 读取          |
-| `VITE_USE_SSL`          | String | 是否使用 SSL/HTTPS 连接 (`true`/`false`)                    | 自动从 `location.protocol` 推导      |
-| `VITE_AVATAR_TYPE`      | String | 前端渲染器强制覆盖：`''`(纯音频) / `'lam'` / `'live2d'`     | 跟随后端 `avatar_config.avatar_type` |
-| `VITE_LIVE2D_MODEL_URL` | String | Live2D 模式下自定义 `.model3.json` 地址（绝对或相对前端根） | `./live2d/hiyori/Hiyori.model3.json` |
+| 环境变量           | 类型   | 用途                                     | 默认值                          |
+| ------------------ | ------ | ---------------------------------------- | ------------------------------- |
+| `VITE_SERVER_IP`   | String | OpenAvatarChat 后端服务器 IP 地址        | 自动从 `location.hostname` 读取 |
+| `VITE_SERVER_PORT` | String | 后端服务器端口                           | 自动从 `location.port` 读取     |
+| `VITE_USE_SSL`     | String | 是否使用 SSL/HTTPS 连接 (`true`/`false`) | 自动从 `location.protocol` 推导 |
 
 ### 配置规则
 
@@ -202,7 +202,7 @@ pnpm run build:linux
 | 特性       | 跟随 OpenAvatarChat | 独立前端              | Electron         |
 | ---------- | ------------------- | --------------------- | ---------------- |
 | 部署复杂度 | 低（自动集成）      | 中（需配置代理/地址） | 高（需打包分发） |
-| 跨域处理   | 无需（同源）        | 需要配置代理          | 无需（内置请求） |
+| 跨域处理   | 无需(同源)          | 需要配置代理          | 无需（内置请求） |
 | .env 配置  | 不需要              | 需要                  | 需要             |
 | 热更新开发 | 不支持              | 支持                  | 支持             |
 | 适用场景   | 生产部署            | 前端开发/自定义部署   | 桌面应用分发     |
@@ -293,40 +293,14 @@ Electron 版本在 Web 版本基础上增加了以下桌面应用特性：
 
 本项目支持通过自定义 AvatarHandler 集成新的数字人渲染引擎（如 Live2D、3D 模型等）。项目内置了基于高斯泼溅（Gaussian Splatting）的 LAM 端侧渲染器和纯音频对话模式。
 
-| 渲染器         | 类型标识   | 说明                                                                                                        |
-| -------------- | ---------- | ----------------------------------------------------------------------------------------------------------- |
-| LAMRenderer    | `'lam'`    | 基于高斯泼溅的端侧数字人渲染，使用 `gaussian-splat-renderer-for-lam` 库                                     |
-| Live2DRenderer | `'live2d'` | 基于 `pixi-live2d-display` + `pixi.js` 的 Cubism 4 端侧 2D 数字人渲染，复用同一条 ARKit blendshape 数据链路 |
-| 纯音频模式     | `''`       | 不渲染数字人形象，仅进行语音对话                                                                            |
+| 渲染器      | 类型标识 | 说明                                                                    |
+| ----------- | -------- | ----------------------------------------------------------------------- |
+| LAMRenderer | `'lam'`  | 基于高斯泼溅的端侧数字人渲染，使用 `gaussian-splat-renderer-for-lam` 库 |
+| 纯音频模式  | `''`     | 不渲染数字人形象，仅进行语音对话                                        |
 
 详细的架构说明、通信协议和扩展开发指南请参阅 [AvatarHandler 开发指南](./docs/extending-avatar-renderer.md)。
 
-### 启用 Live2D 模式
-
-本仓库已经内置了 Live2D 官方免费示例形象 Hiyori（Cubism 4）与 Cubism Core 运行时：
-
-```
-src/renderer/public/live2d/
-├── live2dcubismcore.min.js      # Live2D Cubism 4 Core 运行时（随 index.html 一起加载）
-└── hiyori/                      # Hiyori 示例模型（*.moc3 / motions / textures / LICENSE.txt）
-    └── Hiyori.model3.json
-```
-
-在 `.env` 中加一行即可切换到 Live2D 渲染（不需要改后端）：
-
-```env
-VITE_AVATAR_TYPE=live2d
-# 可选：替换为自定义模型路径
-# VITE_LIVE2D_MODEL_URL=/custom/your.model3.json
-```
-
-切到 `live2d` 后：前端会忽略后端 `avatar_config.avatar_assets_path`（该路径是给 LAM 的高斯泼溅资源用的），改为加载本地 `Hiyori.model3.json` 或 `VITE_LIVE2D_MODEL_URL` 指定的模型；后端继续按原协议下发 ARKit blendshape + PCM 音频，`Live2DRenderer` 会把 `jawOpen / mouthSmile* / eyeBlink* / browInnerUp / ...` 等通道实时映射到 Cubism 参数（`ParamMouthOpenY / ParamEyeLOpen / ParamBrowLY / ...`），整条 `AvatarHandler → Processor → getExpressionData` 链路和 LAM 保持完全一致。
-
-**许可声明**：
-
-- Hiyori 模型来自 [Live2D CubismWebSamples](https://github.com/Live2D/CubismWebSamples)，采用 [Live2D Free Material License Agreement](https://www.live2d.com/eula/live2d-free-material-license-agreement_en.html)，可免费用于非商业/研发/演示场景；**商业使用需要单独向 Live2D 申请许可**。
-- `live2dcubismcore.min.js` 来自 Live2D Cubism SDK for Web，遵循 [Live2D Proprietary Software License Agreement](https://www.live2d.com/eula/live2d-proprietary-software-license-agreement_en.html)。
-- 详细的授权说明请见 [src/renderer/public/live2d/hiyori/LICENSE.txt](./src/renderer/public/live2d/hiyori/LICENSE.txt)。
+> 本分支在此之上额外提供了 `Live2DRenderer`（`avatar_type='live2d'`）。配置方式、模型下载脚本、兼容模型列表、LipSync 参数映射与许可声明见 [README.live2d.md](./README.live2d.md)。
 
 ## 项目构建命令
 

@@ -62,6 +62,15 @@ export class Live2DRenderer {
   private _canvas: HTMLCanvasElement | null = null
   private _app: PIXI.Application | null = null
   private _model: Live2DModel | null = null
+  // Parameter IDs this model uses for lip sync, read from the LipSync group
+  // in model3.json. Common values across the official samples:
+  //   Hiyori / Haru / Natori  -> ["ParamMouthOpenY"]   (Cubism 3/4 default)
+  //   Mao                     -> ["ParamA"]            (Japanese vowel rig)
+  //   Wanko                   -> ["PARAM_MOUTH_OPEN_Y"](Cubism 2.1 legacy id)
+  //   Mark / Rice             -> []                    (no LipSync group)
+  // We write the computed mouth-open value to every id in this list so the
+  // renderer works regardless of which convention the model was authored in.
+  private _lipSyncParamIds: string[] = ['ParamMouthOpenY']
   private _tickHandler: ((deltaTime: number) => void) | null = null
   // Attached to internalModel's `beforeModelUpdate` event — this is the ONLY
   // hook where user parameter overrides survive Live2D's per-frame reset +
@@ -69,6 +78,16 @@ export class Live2DRenderer {
   // Cubism4InternalModel.update). Writing from a PIXI.Ticker callback runs
   // before _render, which then re-applies motions and clobbers our writes.
   private _beforeModelUpdateHandler: (() => void) | null = null
+  // Observes the host container so we refit on CSS-driven size changes (e.g.
+  // a side panel toggling) that don't fire a window `resize` event.
+  private _resizeObserver: ResizeObserver | null = null
+  // Optional vertical anchor within the stage, in [0, 1]. 0.5 = center,
+  // smaller values push the face above center so portrait rigs (tall canvas)
+  // keep the head on-screen after scaling to `fill`.
+  private _verticalAnchor = 0.5
+  // How much of the stage the model should cover along its limiting axis.
+  // 1.0 = touch both edges, <1.0 leaves a small margin.
+  private _fitMargin = 0.98
   private _disposed = false
   // Smoothed mouth open value (audio-driven), held across frames.
   private _mouthOpenSmoothed = 0
@@ -126,8 +145,29 @@ export class Live2DRenderer {
     this._app.stage.addChild(this._model as unknown as PIXI.DisplayObject)
     this._fitModelToStage()
 
-    // Refit when the PIXI renderer resizes (container size change).
+    const settings = (
+      this._model.internalModel as unknown as {
+        settings?: { getLipSyncParameters?: () => string[] | undefined }
+      }
+    ).settings
+    const lipSyncIds = settings?.getLipSyncParameters?.() ?? []
+    this._lipSyncParamIds = lipSyncIds.length > 0 ? lipSyncIds.slice() : ['ParamMouthOpenY']
+
+    // Two refit triggers:
+    //   1. PIXI's own `resize` event — fires when the renderer resizes its
+    //      backing buffer (handles window resize via `resizeTo: container`).
+    //   2. ResizeObserver on the container — catches CSS-driven size changes
+    //      that don't bubble up to a window resize (panels toggling, flex
+    //      layout shifts, fullscreen enter/exit on specific elements, ...).
     this._app.renderer.on('resize', () => this._fitModelToStage())
+    if (typeof ResizeObserver !== 'undefined') {
+      this._resizeObserver = new ResizeObserver(() => {
+        if (this._disposed || !this._app) return
+        this._app.resize()
+        this._fitModelToStage()
+      })
+      this._resizeObserver.observe(this._container)
+    }
 
     // Hook the model's internal update lifecycle. `beforeModelUpdate` fires
     // inside Cubism4InternalModel.update(), AFTER motions/expressions/physics
@@ -186,16 +226,33 @@ export class Live2DRenderer {
 
   private _fitModelToStage(): void {
     if (!this._app || !this._model) return
-    const { width, height } = this._app.renderer.screen
-    const modelW = this._model.width || 1
-    const modelH = this._model.height || 1
-    // Fit so the model fills the available area while preserving aspect ratio,
-    // anchored at the horizontal center and slightly above vertical center so
-    // the face is visible.
-    const scale = Math.min(width / modelW, height / modelH) * 0.95
+    const { width: stageW, height: stageH } = this._app.renderer.screen
+    if (stageW <= 0 || stageH <= 0) return
+
+    // IMPORTANT: use the model's *native* canvas size, not `this._model.width`
+    // (which is the PIXI DisplayObject bounds *after* the current scale is
+    // applied). Using the DisplayObject width compounds each refit by the
+    // previous scale and makes the model shrink on every resize.
+    //
+    // `internalModel.width` / `.height` are baked from the model3.json layout
+    // and stay constant across the lifetime of the model, so normalising
+    // against them gives every rig a consistent target size in the viewport.
+    const internal = this._model.internalModel as unknown as {
+      width?: number
+      height?: number
+      originalWidth?: number
+      originalHeight?: number
+    }
+    const nativeW = internal.width || internal.originalWidth || 1
+    const nativeH = internal.height || internal.originalHeight || 1
+
+    // Contain-fit: scale so the limiting axis hits `_fitMargin * stage`.
+    // This keeps the whole rig visible regardless of native aspect ratio
+    // (Wanko is wide, Haru/Hiyori are portrait, Mao is near-square).
+    const scale = Math.min(stageW / nativeW, stageH / nativeH) * this._fitMargin
     this._model.scale.set(scale)
-    this._model.anchor.set(0.5, 0.5)
-    this._model.position.set(width / 2, height / 2)
+    this._model.anchor.set(0.5, this._verticalAnchor)
+    this._model.position.set(stageW / 2, stageH * this._verticalAnchor)
   }
 
   private _onTick(): void {
@@ -226,7 +283,9 @@ export class Live2DRenderer {
     const speaking = state === TYVoiceChatState.Responding
 
     if (!speaking) {
-      core.setParameterValueById('ParamMouthOpenY', 0)
+      for (const id of this._lipSyncParamIds) {
+        core.setParameterValueById(id, 0)
+      }
       return
     }
 
@@ -238,7 +297,14 @@ export class Live2DRenderer {
     const audioRaw = this._computeAudioMouthOpen()
     const audioFloor = clamp(audioRaw * 1.2, 0, 1) * 0.5
     const mouthOpen = jawBoost > audioFloor ? jawBoost : audioFloor
-    core.setParameterValueById('ParamMouthOpenY', mouthOpen)
+    // Write the same open value to every lip sync param the model declares.
+    // For models like Mao that use ParamA (the Japanese vowel-A channel)
+    // this naturally opens the mouth shape; for modern Cubism 3/4 rigs it
+    // drives ParamMouthOpenY; for legacy Cubism 2.1 rigs (Wanko) it drives
+    // PARAM_MOUTH_OPEN_Y. All three parameters live in [0, 1].
+    for (const id of this._lipSyncParamIds) {
+      core.setParameterValueById(id, mouthOpen)
+    }
 
     if (frame) applyArkitToCubism4(core, frame)
   }
@@ -246,6 +312,14 @@ export class Live2DRenderer {
   dispose(): void {
     if (this._disposed) return
     this._disposed = true
+    if (this._resizeObserver) {
+      try {
+        this._resizeObserver.disconnect()
+      } catch (e) {
+        console.warn('Live2DRenderer: error disconnecting resize observer', e)
+      }
+      this._resizeObserver = null
+    }
     if (this._tickHandler) {
       PIXI.Ticker.shared.remove(this._tickHandler)
       this._tickHandler = null
@@ -288,10 +362,12 @@ function applyArkitToCubism4(
     core.setParameterValueById(id, value, weight)
 
   // ---- Mouth ----
-  // NOTE: ParamMouthOpenY is intentionally NOT written here. It is driven in
-  // Live2DRenderer._applyParamsToModel from an 8x-boosted jawOpen with an
-  // audio-RMS floor, so that syllable-level variation is visible and there is
-  // a fallback when the server emits degenerate jawOpen.
+  // NOTE: the lip-sync / mouth-open parameters are intentionally NOT written
+  // here. They are driven in Live2DRenderer._applyParamsToModel by iterating
+  // the model's LipSync group (ParamMouthOpenY / ParamA / PARAM_MOUTH_OPEN_Y
+  // depending on the rig) from an 8x-boosted jawOpen with an audio-RMS
+  // floor, so that syllable-level variation is visible and there is a
+  // fallback when the server emits degenerate jawOpen.
   const smileL = f.mouthSmileLeft ?? 0
   const smileR = f.mouthSmileRight ?? 0
   const frownL = f.mouthFrownLeft ?? 0
