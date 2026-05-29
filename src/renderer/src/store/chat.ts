@@ -12,6 +12,7 @@ import { useVisionStore } from './vision'
 interface AvatarLike {
   setAvatarMute?(isMute: boolean): void
   interrupt?(): void
+  reloadRenderer?(newAssetsPath?: string): Promise<void> | void
 }
 
 interface ChatState {

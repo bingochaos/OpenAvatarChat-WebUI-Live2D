@@ -29,3 +29,7 @@ out
 
 dist-electron
 .env
+
+# Live2D model folders downloaded by scripts/download-live2d-models.sh
+# (manifest models.json, README.md and live2dcubismcore.min.js stay tracked).
+src/renderer/public/live2d/*/

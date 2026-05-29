@@ -1,5 +1,7 @@
 # OpenAvatarChat WebUI
 
+> **本仓库是 [HumanAIGC-Engineering/OpenAvatarChat-WebUI](https://github.com/HumanAIGC-Engineering/OpenAvatarChat-WebUI) 的分支**，在上游之上新增了 Live2D（Cubism 3/4/5）端侧渲染支持。所有与 Live2D 相关的改动、模型下载脚本、兼容性说明和使用方法集中整理在 **[README.live2d.md](./README.live2d.md)**，其余内容保持与上游一致。
+
 ## 项目简介
 
 这是 [OpenAvatarChat](https://github.com/HumanAIGC-Engineering/OpenAvatarChat) 项目的官方 Web 前端界面，基于 Vue 3 + TypeScript + Vite 构建，同时支持 Electron 桌面应用。
@@ -22,13 +24,15 @@
 
 `.env` 文件位于项目根目录，用于配置前端连接后端服务的地址信息。
 
+> **本分支补充**：仓库另外入库了一个 `.env.production`，让 `pnpm run build` 默认产出 Live2D 模式的 `dist/`，方便 OpenAvatarChat 直接换 submodule 使用。该机制、变量含义与子模块集成步骤见 [README.live2d.md](./README.live2d.md#作为-openavatarchat-子模块使用开箱即用-live2d)。下面这张表仍是上游原有的 server 相关变量。
+
 ### 变量说明
 
-| 环境变量 | 类型 | 用途 | 默认值 |
-|---------|------|------|--------|
-| `VITE_SERVER_IP` | String | OpenAvatarChat 后端服务器 IP 地址 | 自动从 `location.hostname` 读取 |
-| `VITE_SERVER_PORT` | String | 后端服务器端口 | 自动从 `location.port` 读取 |
-| `VITE_USE_SSL` | String | 是否使用 SSL/HTTPS 连接 (`true`/`false`) | 自动从 `location.protocol` 推导 |
+| 环境变量           | 类型   | 用途                                     | 默认值                          |
+| ------------------ | ------ | ---------------------------------------- | ------------------------------- |
+| `VITE_SERVER_IP`   | String | OpenAvatarChat 后端服务器 IP 地址        | 自动从 `location.hostname` 读取 |
+| `VITE_SERVER_PORT` | String | 后端服务器端口                           | 自动从 `location.port` 读取     |
+| `VITE_USE_SSL`     | String | 是否使用 SSL/HTTPS 连接 (`true`/`false`) | 自动从 `location.protocol` 推导 |
 
 ### 配置规则
 
@@ -70,10 +74,10 @@ interface InitConfigResponse {
 
   // 数字人配置
   avatar_config?: {
-    avatar_type: string          // 渲染类型标识，如 'lam'（端侧渲染）或 ''（纯音频）
-    avatar_ws_route: string      // 数字人 WebSocket 路由，如 '/ws/webrtc/avatar'
-    avatar_assets_path: string   // 数字人模型资源路径
-    ws_session_route?: string    // 会话 WebSocket 路由（备选）
+    avatar_type: string // 渲染类型标识，如 'lam'（端侧渲染）或 ''（纯音频）
+    avatar_ws_route: string // 数字人 WebSocket 路由，如 '/ws/webrtc/avatar'
+    avatar_assets_path: string // 数字人模型资源路径
+    ws_session_route?: string // 会话 WebSocket 路由（备选）
   }
 
   // 备选会话 WebSocket 路由
@@ -89,15 +93,15 @@ interface InitConfigResponse {
 
 ### 字段说明
 
-| 字段 | 前端存储位置 | 用途 | 默认值 |
-|------|------------|------|--------|
-| `rtc_configuration` | `appStore.rtcConfig` | 初始化 WebRTC PeerConnection 连接 | `{}` |
-| `chat_mode` | `appStore.chatMode` | 决定使用 WebRTC 或 WebSocket 对话模式 | `'webrtc'` |
-| `avatar_config.avatar_type` | `appStore.avatarType` | 选择数字人渲染引擎 | `''` |
-| `avatar_config.avatar_ws_route` | `appStore.avatarWSRoute` | 建立数字人 WebSocket 通道 | `''` |
-| `avatar_config.avatar_assets_path` | `appStore.avatarAssetsPath` | 加载数字人模型资源（自动转换为完整 URL） | `''` |
-| `avatar_config.ws_session_route` | `appStore.wsSessionRoute` | 备选会话路由，当 `avatar_ws_route` 未设置时使用 | `''` |
-| `track_constraints` | `mediaStore.trackConstraints` | 控制前端音视频采集参数 | 浏览器默认值 |
+| 字段                               | 前端存储位置                  | 用途                                            | 默认值       |
+| ---------------------------------- | ----------------------------- | ----------------------------------------------- | ------------ |
+| `rtc_configuration`                | `appStore.rtcConfig`          | 初始化 WebRTC PeerConnection 连接               | `{}`         |
+| `chat_mode`                        | `appStore.chatMode`           | 决定使用 WebRTC 或 WebSocket 对话模式           | `'webrtc'`   |
+| `avatar_config.avatar_type`        | `appStore.avatarType`         | 选择数字人渲染引擎                              | `''`         |
+| `avatar_config.avatar_ws_route`    | `appStore.avatarWSRoute`      | 建立数字人 WebSocket 通道                       | `''`         |
+| `avatar_config.avatar_assets_path` | `appStore.avatarAssetsPath`   | 加载数字人模型资源（自动转换为完整 URL）        | `''`         |
+| `avatar_config.ws_session_route`   | `appStore.wsSessionRoute`     | 备选会话路由，当 `avatar_ws_route` 未设置时使用 | `''`         |
+| `track_constraints`                | `mediaStore.trackConstraints` | 控制前端音视频采集参数                          | 浏览器默认值 |
 
 ### 配置优先级
 
@@ -197,13 +201,13 @@ pnpm run build:linux
 
 ### 三种部署方式对比
 
-| 特性 | 跟随 OpenAvatarChat | 独立前端 | Electron |
-|------|-------------------|---------|----------|
-| 部署复杂度 | 低（自动集成） | 中（需配置代理/地址） | 高（需打包分发） |
-| 跨域处理 | 无需（同源） | 需要配置代理 | 无需（内置请求） |
-| .env 配置 | 不需要 | 需要 | 需要 |
-| 热更新开发 | 不支持 | 支持 | 支持 |
-| 适用场景 | 生产部署 | 前端开发/自定义部署 | 桌面应用分发 |
+| 特性       | 跟随 OpenAvatarChat | 独立前端              | Electron         |
+| ---------- | ------------------- | --------------------- | ---------------- |
+| 部署复杂度 | 低（自动集成）      | 中（需配置代理/地址） | 高（需打包分发） |
+| 跨域处理   | 无需(同源)          | 需要配置代理          | 无需（内置请求） |
+| .env 配置  | 不需要              | 需要                  | 需要             |
+| 热更新开发 | 不支持              | 支持                  | 支持             |
+| 适用场景   | 生产部署            | 前端开发/自定义部署   | 桌面应用分发     |
 
 ## Manager 管理后台
 
@@ -246,12 +250,12 @@ pnpm run build:linux
 
 Manager 通过独立的 WebSocket 连接（`/ws/manager/data_tool`）与后端通信，接收以下类型的实时事件：
 
-| 事件类型 | 说明 |
-|---------|------|
-| `snapshot` | 初始会话快照，同步当前所有活跃会话 |
-| `chat_data` | 聊天消息、音频数据、图像数据 |
-| `signal` | Handler 节点信号（stream_begin/stream_end/interrupt） |
-| `current_config` | 后端运行时配置更新 |
+| 事件类型         | 说明                                                  |
+| ---------------- | ----------------------------------------------------- |
+| `snapshot`       | 初始会话快照，同步当前所有活跃会话                    |
+| `chat_data`      | 聊天消息、音频数据、图像数据                          |
+| `signal`         | Handler 节点信号（stream_begin/stream_end/interrupt） |
+| `current_config` | 后端运行时配置更新                                    |
 
 ## Electron 增强功能
 
@@ -291,24 +295,26 @@ Electron 版本在 Web 版本基础上增加了以下桌面应用特性：
 
 本项目支持通过自定义 AvatarHandler 集成新的数字人渲染引擎（如 Live2D、3D 模型等）。项目内置了基于高斯泼溅（Gaussian Splatting）的 LAM 端侧渲染器和纯音频对话模式。
 
-| 渲染器 | 类型标识 | 说明 |
-|--------|---------|------|
-| LAMRenderer | `'lam'` | 基于高斯泼溅的端侧数字人渲染，使用 `gaussian-splat-renderer-for-lam` 库 |
-| 纯音频模式 | `''` | 不渲染数字人形象，仅进行语音对话 |
+| 渲染器      | 类型标识 | 说明                                                                    |
+| ----------- | -------- | ----------------------------------------------------------------------- |
+| LAMRenderer | `'lam'`  | 基于高斯泼溅的端侧数字人渲染，使用 `gaussian-splat-renderer-for-lam` 库 |
+| 纯音频模式  | `''`     | 不渲染数字人形象，仅进行语音对话                                        |
 
 详细的架构说明、通信协议和扩展开发指南请参阅 [AvatarHandler 开发指南](./docs/extending-avatar-renderer.md)。
 
+> 本分支在此之上额外提供了 `Live2DRenderer`（`avatar_type='live2d'`）。配置方式、模型下载脚本、兼容模型列表、LipSync 参数映射与许可声明见 [README.live2d.md](./README.live2d.md)。
+
 ## 项目构建命令
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm run dev` | Web 开发模式（HMR 热更新） |
-| `pnpm run build` | Web 生产构建（输出到 `dist/`） |
-| `pnpm run electron:dev` | Electron 开发模式 |
-| `pnpm run electron:build` | Electron 代码编译 |
-| `pnpm run build:mac` | macOS 应用打包 |
-| `pnpm run build:win` | Windows 应用打包 |
-| `pnpm run build:linux` | Linux 应用打包 |
+| 命令                      | 说明                           |
+| ------------------------- | ------------------------------ |
+| `pnpm run dev`            | Web 开发模式（HMR 热更新）     |
+| `pnpm run build`          | Web 生产构建（输出到 `dist/`） |
+| `pnpm run electron:dev`   | Electron 开发模式              |
+| `pnpm run electron:build` | Electron 代码编译              |
+| `pnpm run build:mac`      | macOS 应用打包                 |
+| `pnpm run build:win`      | Windows 应用打包               |
+| `pnpm run build:linux`    | Linux 应用打包                 |
 
 ## 许可证
 
