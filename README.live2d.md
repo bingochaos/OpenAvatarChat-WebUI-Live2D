@@ -21,23 +21,71 @@
 
 ## 启用方式
 
-运行时只需要**改 `.env`，不需要改后端**：
+**本分支已经默认开启 Live2D** —— `pnpm run build` 产出的 `dist/` 出厂即为 Live2D 模式，OpenAvatarChat 只要换上这份 `dist/` 就能直接用（见下方[「作为 OpenAvatarChat 子模块使用」](#作为-openavatarchat-子模块使用开箱即用-live2d)）。这套默认值由仓库里**入库的 `.env.production`** 提供：
 
 ```env
-# 切到 Live2D 渲染器
+# .env.production —— 随仓库入库，vite build (mode=production) 自动加载
 VITE_AVATAR_TYPE=live2d
-
-# 可选：强制指定一个 .model3.json（绝对或相对前端根）
-# 不填时默认使用 ./live2d/hiyori/Hiyori.model3.json
-# VITE_LIVE2D_MODEL_URL=./live2d/mao/Mao.model3.json
+VITE_LIVE2D_MODEL_URL=./live2d/hiyori/Hiyori.model3.json
+# 留空 => 由浏览器 location.* 自动探测后端地址（与 OpenAvatarChat 同源），
+# 不要在这里写死 IP/端口/SSL，否则打出来的 dist 只能连那一个 host。
+VITE_SERVER_IP=
+VITE_SERVER_PORT=
+VITE_USE_SSL=
 ```
 
-| 环境变量                | 类型   | 用途                                                        | 默认值                               |
+> Vite 会从仓库根目录加载 `.env`、本机覆盖文件 `.env.local`，以及当前 mode 对应的 `.env.[mode]` / `.env.[mode].local`；越靠后的文件优先级越高，production 构建里 `.env.production` 会覆盖 `.env.local` 的同名 key。所以开发者本地的 `.env`（通常把开发代理指向 `127.0.0.1`，仍被 `.gitignore` 忽略）不会污染生产构建：`.env.production` 把这几个 server 变量显式清空，生产包始终回落到 `location.*` 自动探测。
+>
+> 注意 `vite.config.ts` 用 `loadEnv(mode, …)` + `envDir` 指向仓库根目录来读取这些文件——`root` 指向 `src/renderer`，若不这样 Vite 默认只会在 `src/renderer/` 下找 `.env`，`VITE_AVATAR_TYPE` 之类的变量根本不会被 bake 进包里。
+
+如果要在本地开发时临时**关掉** Live2D 或换默认模型，可以建一个 `.env.local`（被忽略，仅本机生效）覆盖，例如 `VITE_AVATAR_TYPE=` 退回跟随后端，或 `VITE_LIVE2D_MODEL_URL=./live2d/mao/Mao.model3.json` 换模型。若要改变 `pnpm run build` 产出的生产包，请用 `.env.production.local` 覆盖，或直接调整入库的 `.env.production`。
+
+| 环境变量                | 类型   | 用途                                                        | 默认值（本分支 `.env.production`）   |
 | ----------------------- | ------ | ----------------------------------------------------------- | ------------------------------------ |
-| `VITE_AVATAR_TYPE`      | String | 前端渲染器强制覆盖：`''`(纯音频) / `'lam'` / `'live2d'`     | 跟随后端 `avatar_config.avatar_type` |
+| `VITE_AVATAR_TYPE`      | String | 前端渲染器强制覆盖：`''`(纯音频) / `'lam'` / `'live2d'`     | `live2d`                             |
 | `VITE_LIVE2D_MODEL_URL` | String | Live2D 模式下自定义 `.model3.json` 地址（绝对或相对前端根） | `./live2d/hiyori/Hiyori.model3.json` |
 
+> 不设 `.env.production` 单独构建时，`VITE_AVATAR_TYPE` 默认跟随后端 `avatar_config.avatar_type`，`VITE_LIVE2D_MODEL_URL` 默认回落到 `./live2d/hiyori/Hiyori.model3.json`。
+
 切到 `live2d` 后：前端会忽略后端 `avatar_config.avatar_assets_path`（该路径是给 LAM 的高斯泼溅资源用的），改为加载本地 `.model3.json`；后端继续按原协议下发 ARKit blendshape + PCM 音频，整条 `AvatarHandler → Processor → getExpressionData` 链路和 LAM 完全一致。
+
+## 作为 OpenAvatarChat 子模块使用（开箱即用 Live2D）
+
+目标：OpenAvatarChat 把**整个本仓库**当成一个 git submodule，然后用本仓库 `dist/` 的内容替换它的前端静态资源目录 `src/service/frontend_service/frontend/dist/`，即可在**不动后端**的前提下切到 Live2D。
+
+### 1. 在 OpenAvatarChat 仓库里加 submodule
+
+```bash
+# 在 OpenAvatarChat 仓库根目录
+git submodule add -b feature/live2d \
+  https://github.com/bingochaos/OpenAvatarChat-WebUI-Live2D.git \
+  third_party/webui-live2d
+git submodule update --init --recursive
+```
+
+> 路径 `third_party/webui-live2d` 只是示例，放哪都行——关键是后面要把它的 `dist/` 落到 `src/service/frontend_service/frontend/dist/`。
+
+### 2. 把 dist/ 落到后端的前端目录
+
+本仓库 `dist/` 已经入库（出厂即 Live2D 模式，自带默认 Hiyori 模型 + `live2dcubismcore.min.js` + `models.json`），所以**不需要在 OpenAvatarChat 那边重新编译**，直接同步即可：
+
+```bash
+# 在 OpenAvatarChat 仓库根目录
+rm -rf src/service/frontend_service/frontend/dist
+cp -r third_party/webui-live2d/dist src/service/frontend_service/frontend/dist
+```
+
+启动后端后访问 `https://<your-host>:8282`，会自动重定向到前端并以 Live2D 模式加载 Hiyori。前端通过浏览器 `location.*` 自动探测后端地址，**无论部署在哪个 host 都不用改 `.env`**。
+
+### 3. 升级前端
+
+本仓库出新版本时，在 OpenAvatarChat 里 `cd third_party/webui-live2d && git pull` 拉到对应提交，再重复第 2 步的 `cp` 即可。
+
+### dist 里打包了什么 / 想换或加模型
+
+- 入库的 `dist/` **只打包默认的 Hiyori 模型**（约 5MB），`dist/live2d/models.json` 也只列 Hiyori，所以前端模型切换器只显示一个。这是为了控制仓库体积。
+- 想在打包产物里带上更多模型：先在本仓库跑下载脚本拉模型，再重新构建、把多出来的模型目录一起提交进 `dist/`（详见上面[「下载官方示例模型」](#下载官方示例模型)）。注意 `vite build` 会用 `emptyOutDir` 清空 `dist/` 再从 `src/renderer/public/live2d/` 拷贝，**所以要打进 dist 的模型必须先下载到 `public/live2d/` 下**；`src/renderer/public/live2d/*/` 默认被 `.gitignore` 忽略，只有 Hiyori 的模型文件入了库，这也是「干净 clone + `pnpm run build` 就能复现出可用 dist」的原因。
+- OpenAvatarChat 侧如果只想自己换模型而不想重新编译：直接往 `src/service/frontend_service/frontend/dist/live2d/<id>/` 丢模型文件，并在 `dist/live2d/models.json` 里加一条，或用 `VITE_LIVE2D_MODEL_URL` 指向它（需重新构建才能 bake）。
 
 ## 下载官方示例模型
 

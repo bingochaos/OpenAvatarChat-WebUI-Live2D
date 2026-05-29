@@ -24,6 +24,8 @@
 
 `.env` 文件位于项目根目录，用于配置前端连接后端服务的地址信息。
 
+> **本分支补充**：仓库另外入库了一个 `.env.production`，让 `pnpm run build` 默认产出 Live2D 模式的 `dist/`，方便 OpenAvatarChat 直接换 submodule 使用。该机制、变量含义与子模块集成步骤见 [README.live2d.md](./README.live2d.md#作为-openavatarchat-子模块使用开箱即用-live2d)。下面这张表仍是上游原有的 server 相关变量。
+
 ### 变量说明
 
 | 环境变量           | 类型   | 用途                                     | 默认值                          |
