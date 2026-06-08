@@ -4,11 +4,12 @@ directories:
   output: dist-electron/release
   buildResources: build
 files:
-  - "dist-electron/out/**/*"
+  - 'dist-electron/out/**/*'
 asarUnpack:
   - resources/**
 win:
   executableName: electron-app
+  signAndEditExecutable: false
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

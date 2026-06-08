@@ -29,6 +29,9 @@ out
 
 dist-electron
 .env
+.env.*
+!.env.example
+!.env.electron.example
 
 # Live2D model folders downloaded by scripts/download-live2d-models.sh
 # (manifest models.json, README.md and live2dcubismcore.min.js stay tracked).
